@@ -40,12 +40,15 @@ if you want to see the basics and wanted to understand how the call back functio
 ```shell
 streamlit run MQTTClient.py
 ```
+![image](https://github.com/user-attachments/assets/edb53750-b7f2-473f-89a3-21dc3cf8e15c)
 
 Once you know the basics, run full fledge thread based working client with option to send periodic data. `MQTTClient_th.py`. It has Logs for new begineer to understand the flow. 
 ```shell
 streamlit run MQTTClient_th.py
 ```
+![image](https://github.com/user-attachments/assets/f154dcaf-86a1-4ec8-a183-9ef3a0cd1123)
 
 ### Prerequisites
+MQTT broker working on your machine. if not use any other MQTT broker.
 Python
 PIP
