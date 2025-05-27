@@ -38,14 +38,12 @@ pip install -r requirements.txt
 **Running the code**
 if you want to see the basics and wanted to understand how the call back functions is being called use `MQTTClient.py`. It has Logs for new begineer to understand the flow. 
 ```shell
-# 
-$ streamlit run MQTTClient.py
+streamlit run MQTTClient.py
 ```
 
 Once you know the basics, run full fledge thread based working client with option to send periodic data. `MQTTClient_th.py`. It has Logs for new begineer to understand the flow. 
 ```shell
-# 
-$ streamlit run MQTTClient_th.py
+streamlit run MQTTClient_th.py
 ```
 
 ### Prerequisites
