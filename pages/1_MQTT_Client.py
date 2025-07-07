@@ -258,14 +258,27 @@ def unsubscribe_topic_ui(topic):
 
 def publish_message_ui(topic, payload, qos, retain):
     """Handles publishing a single message from UI."""
+def publish_message_ui():
+    """Handles publishing a single message from UI."""
+    # Get current values from session state
+    topic = st.session_state.get('publish_topic_input', '')
+    payload = st.session_state.get('publish_payload_input', '')
+    qos = st.session_state.get('publish_qos_input', 0)
+    retain = st.session_state.get('publish_retain_input', False)
+    
     if st.session_state.mqtt_client and st.session_state.is_mqtt_connected:
         st.session_state.mqtt_client.publish(topic, payload, qos, retain)
         st.toast(f"Published to '{topic}'") # Use toast for less intrusive feedback
     else:
         st.warning("Not connected to MQTT broker. Connect first to publish.")
 
-def start_periodic_publisher(messages_to_publish, interval, stop_event):
+def start_periodic_publisher():
     """Starts a background thread for periodic publishing."""
+    # Get current values from session state
+    messages_to_publish = st.session_state.auto_publish_messages
+    interval = st.session_state.get('publish_interval_input', 1.0)
+    stop_event = st.session_state.stop_publish_event
+    
     if st.session_state.mqtt_client and st.session_state.is_mqtt_connected:
         if not st.session_state.publish_thread_running:
             stop_event.clear() # Clear any previous stop signal
@@ -402,7 +415,6 @@ with col1:
             st.form_submit_button(
                 "Publish",
                 on_click=publish_message_ui,
-                args=(publish_topic, publish_payload, publish_qos, publish_retain),
                 disabled=not st.session_state.is_mqtt_connected
             )
 
@@ -449,7 +461,6 @@ with col1:
             start_periodic_button = st.button(
                 "Start Periodic Publish",
                 on_click=start_periodic_publisher,
-                args=(st.session_state.auto_publish_messages, publish_interval, st.session_state.stop_publish_event),
                 # Check for empty messages explicitly
                 disabled=not st.session_state.is_mqtt_connected or st.session_state.publish_thread_running or len(st.session_state.auto_publish_messages) == 0,
                 key="start_periodic_button"
