@@ -197,6 +197,8 @@ if 'last_message_count' not in st.session_state: # Added for more robust message
     st.session_state.last_message_count = 0
 if 'last_json_message_count' not in st.session_state:
     st.session_state.last_json_message_count = 0
+if 'auto_refresh_messages' not in st.session_state:
+    st.session_state.auto_refresh_messages = False
 
 
 # --- Helper Functions for UI Interactions ---
@@ -501,6 +503,22 @@ with col2:
         st.info("No topics subscribed yet.")
 
     st.subheader("Received Messages")
+    
+    # Auto-refresh checkbox
+    col_auto_refresh, col_manual_refresh = st.columns([1, 1])
+    with col_auto_refresh:
+        auto_refresh_enabled = st.checkbox(
+            "Auto-refresh messages",
+            value=st.session_state.auto_refresh_messages,
+            help="Automatically refresh the message table every 2 seconds",
+            key="auto_refresh_messages_checkbox"
+        )
+        st.session_state.auto_refresh_messages = auto_refresh_enabled
+    
+    with col_manual_refresh:
+        if st.button("Manual Refresh", help="Manually refresh to get the latest messages"):
+            st.rerun()
+    
     # Placeholder for messages, will be updated periodically
     message_placeholder = st.empty()
 
@@ -543,5 +561,24 @@ with col2:
         with message_placeholder.container():
             st.info("Connect to the MQTT broker to start receiving messages.")
 
+# Auto-refresh mechanism for received messages
+if (st.session_state.auto_refresh_messages and 
+    st.session_state.is_mqtt_connected):
+    
+    # Show auto-refresh status
+    st.info("🔄 Auto-refresh enabled - Messages will update automatically every 2 seconds")
+    
+    # Import time for the delay
+    import time
+    
+    # Wait 2 seconds before triggering refresh
+    time.sleep(2)
+    st.rerun()
+
+elif (st.session_state.auto_refresh_messages and 
+      not st.session_state.is_mqtt_connected):
+    st.warning("⚠️ Auto-refresh is enabled but MQTT is not connected")
+
+# Keep the original refresh button for manual MQTT event processing
 if st.button("Refresh to process MQTT events"):
-        st.rerun()
+    st.rerun()
