@@ -349,6 +349,30 @@ def load_periodic_messages_from_csv(uploaded_file):
 # --- UI Layout ---
 
 st.title("MQTT Client")
+st.sidebar.header("MQTT Connection")
+with st.sidebar.form("mqtt_config_form"):
+    st.session_state.broker_address = st.text_input("Broker Address", value=st.session_state.broker_address, key="broker_input")
+    st.session_state.broker_port = st.number_input("Port", value=st.session_state.broker_port, min_value=1, max_value=65535, key="port_input")
+    st.session_state.client_id = st.text_input("Client ID (leave blank for auto-generate)", value=st.session_state.client_id, key="client_id_input")
+    st.session_state.username = st.text_input("Username (optional)", value=st.session_state.username, key="username_input")
+
+    password_type = "text" if st.session_state.show_password else "password"
+    st.session_state.password = st.text_input("Password (optional)", type=password_type, value=st.session_state.password, key="password_input")
+    st.session_state.show_password = st.checkbox("Show Password", value=st.session_state.show_password, key="show_password_checkbox")
+
+    col_connect, col_disconnect = st.columns(2)
+    with col_connect:
+        connect_button = st.form_submit_button(
+            "Connect",
+            on_click=connect_mqtt_ui,
+            disabled=st.session_state.is_mqtt_connected
+        )
+    with col_disconnect:
+        disconnect_button = st.form_submit_button(
+            "Disconnect",
+            on_click=disconnect_mqtt_ui,
+            disabled=not st.session_state.is_mqtt_connected
+        )
 
 
 # Main content area
@@ -359,9 +383,14 @@ with col1:
     st.write("---") # Separator
 
     st.subheader("Manual Publish")
+    MQTT_JSON = { "temperature": 25.5, "humidity": 60, "sensor": {
+        "id": "temp01",
+        "location": "room1"
+    }}
+    MQTT_JSON_Message = json.dumps(MQTT_JSON, indent=1)
     with st.form("publish_form"):
         publish_topic = st.text_input("Topic", value="test/message", key="publish_topic_input")
-        publish_payload = st.text_area("Payload", value="Hello MQTT from Streamlit!", key="publish_payload_input")
+        publish_payload = st.text_area("Payload", value=MQTT_JSON_Message, key="publish_payload_input")
         col_qos_retain, col_manual_publish_btn = st.columns([1, 1])
         with col_qos_retain:
             publish_qos = st.selectbox("QoS", options=[0, 1, 2], index=0, key="publish_qos_input")
