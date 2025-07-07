@@ -197,6 +197,8 @@ if 'last_message_count' not in st.session_state: # Added for more robust message
     st.session_state.last_message_count = 0
 if 'last_json_message_count' not in st.session_state:
     st.session_state.last_json_message_count = 0
+if 'auto_refresh_messages' not in st.session_state:
+    st.session_state.auto_refresh_messages = False
 
 
 # --- Helper Functions for UI Interactions ---
@@ -503,6 +505,21 @@ with col2:
     st.subheader("Received Messages")
     # Placeholder for messages, will be updated periodically
     message_placeholder = st.empty()
+    
+    # Auto-refresh controls
+    col_auto_refresh, col_manual_refresh = st.columns([1, 1])
+    with col_auto_refresh:
+        auto_refresh = st.checkbox(
+            "Auto Refresh Messages",
+            value=st.session_state.auto_refresh_messages,
+            help="Automatically refresh messages every 2 seconds",
+            key="auto_refresh_messages_checkbox"
+        )
+        st.session_state.auto_refresh_messages = auto_refresh
+    
+    with col_manual_refresh:
+        if st.button("Manual Refresh", help="Manually refresh to get latest messages"):
+            st.rerun()
 
     # --- Message Update Logic (Rely on Streamlit's natural reruns) ---
     # This section gets executed on every Streamlit rerun (e.g., user interaction, button click).
@@ -511,19 +528,27 @@ with col2:
         new_messages = st.session_state.mqtt_client.get_received_messages()
         new_json_messages = st.session_state.mqtt_client.get_json_messages()
         
-        # Only update DataFrame and re-render if there are new messages, or if it was empty
-        # and now has messages. This helps prevent unnecessary dataframe re-creations.
-        if new_messages and (len(new_messages) != len(st.session_state.messages_df) or st.session_state.messages_df.empty):
+        # Always update DataFrame to ensure we show the latest messages
+        # Remove the conditional check that was preventing latest message display
+        if new_messages:
             st.session_state.messages_df = pd.DataFrame(new_messages)
             st.session_state.messages_df["Serial No."] = range(1, len(st.session_state.messages_df) + 1)
             st.session_state.messages_df = st.session_state.messages_df[["Serial No.", "Timestamp", "Topic", "Payload"]]
             
-        # Update JSON messages DataFrame
-        if new_json_messages and (len(new_json_messages) != len(st.session_state.json_messages_df) or st.session_state.json_messages_df.empty):
+        # Always update JSON messages DataFrame
+        if new_json_messages:
             st.session_state.json_messages_df = pd.DataFrame(new_json_messages)
             
         with message_placeholder.container():
             if not st.session_state.messages_df.empty:
+                # Show message count and connection status
+                col_msg_info1, col_msg_info2 = st.columns(2)
+                with col_msg_info1:
+                    st.metric("Total Messages", len(st.session_state.messages_df))
+                with col_msg_info2:
+                    last_message_time = st.session_state.messages_df.iloc[-1]['Timestamp']
+                    st.metric("Last Message", last_message_time)
+                
                 st.dataframe(st.session_state.messages_df, height=300, use_container_width=True)
 
                 # --- Export Received Messages to CSV ---
@@ -538,10 +563,33 @@ with col2:
                     key="download_received_csv"
                 )
             else:
-                st.info("Waiting for messages...")
+                if st.session_state.is_mqtt_connected:
+                    st.info("Connected to MQTT broker. Waiting for messages...")
+                else:
+                    st.info("Not connected to MQTT broker.")
     else:
         with message_placeholder.container():
             st.info("Connect to the MQTT broker to start receiving messages.")
 
-if st.button("Refresh to process MQTT events"):
-        st.rerun()
+# --- Auto-refresh mechanism ---
+if (st.session_state.auto_refresh_messages and 
+    st.session_state.is_mqtt_connected):
+    
+    # Show auto-refresh status
+    st.info("🔄 Auto-refresh enabled - Messages will update automatically every 2 seconds")
+    
+    # Import time for auto-refresh delay
+    import time
+    
+    # Implement auto-refresh with a short delay
+    time.sleep(2)  # Wait 2 seconds before triggering refresh
+    st.rerun()  # Trigger page refresh to get latest messages
+
+elif (st.session_state.auto_refresh_messages and 
+      not st.session_state.is_mqtt_connected):
+    st.warning("⚠️ Auto-refresh is enabled but MQTT is not connected")
+
+# Keep the manual refresh button for processing MQTT events
+st.write("---")
+if st.button("Process MQTT Events", help="Process any pending MQTT network events"):
+    st.rerun()
