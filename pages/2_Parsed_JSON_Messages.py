@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import json
+import time
 from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
@@ -15,6 +16,30 @@ if 'selected_x_axis' not in st.session_state:
     st.session_state.selected_x_axis = "Timestamp"
 if 'selected_y_axes' not in st.session_state:
     st.session_state.selected_y_axes = []
+if 'last_json_message_count' not in st.session_state:
+    st.session_state.last_json_message_count = 0
+
+# --- Auto-refresh data from MQTT client ---
+# Check if MQTT client exists and is connected, then fetch latest JSON messages
+if ('mqtt_client' in st.session_state and 
+    st.session_state.mqtt_client and 
+    hasattr(st.session_state, 'is_mqtt_connected') and 
+    st.session_state.is_mqtt_connected):
+    
+    # Get the latest JSON messages from the MQTT client
+    latest_json_messages = st.session_state.mqtt_client.get_json_messages()
+    
+    # Update the JSON messages DataFrame if there are new messages
+    if latest_json_messages:
+        current_message_count = len(latest_json_messages)
+        
+        # Only update if we have new messages or if the DataFrame is empty
+        if (current_message_count != st.session_state.last_json_message_count or 
+            'json_messages_df' not in st.session_state or 
+            st.session_state.json_messages_df.empty):
+            
+            st.session_state.json_messages_df = pd.DataFrame(latest_json_messages)
+            st.session_state.last_json_message_count = current_message_count
 
 st.title("Parsed JSON Messages")
 
@@ -22,9 +47,33 @@ st.title("Parsed JSON Messages")
 if 'json_messages_df' not in st.session_state or st.session_state.json_messages_df.empty:
     st.info("No JSON messages available. Please connect to the MQTT broker and receive some JSON messages first.")
     st.markdown("**Note:** JSON messages will appear here when valid JSON payloads are received on the MQTT Client page.")
+    
+    # Show connection status
+    if ('mqtt_client' in st.session_state and 
+        st.session_state.mqtt_client and 
+        hasattr(st.session_state, 'is_mqtt_connected')):
+        if st.session_state.is_mqtt_connected:
+            st.success("MQTT Client is connected. Waiting for JSON messages...")
+        else:
+            st.warning("MQTT Client is not connected. Please connect on the MQTT Client page.")
+    else:
+        st.info("Please visit the MQTT Client page to establish a connection.")
+        
 else:
     # Display JSON messages
     st.subheader("JSON Messages Table")
+    
+    # Show message count and last update info
+    col_info1, col_info2, col_info3 = st.columns(3)
+    with col_info1:
+        st.metric("Total JSON Messages", len(st.session_state.json_messages_df))
+    with col_info2:
+        if not st.session_state.json_messages_df.empty:
+            last_message_time = st.session_state.json_messages_df.iloc[-1]['Timestamp']
+            st.metric("Last Message", last_message_time)
+    with col_info3:
+        connection_status = "Connected" if (hasattr(st.session_state, 'is_mqtt_connected') and st.session_state.is_mqtt_connected) else "Disconnected"
+        st.metric("MQTT Status", connection_status)
     
     # Create a display DataFrame without the raw JSON Data column for cleaner view
     display_df = st.session_state.json_messages_df.drop(columns=['JSON Data'], errors='ignore')
@@ -179,5 +228,33 @@ else:
                 st.info("Select Y-axis columns and click 'Generate Graph' or enable 'Auto Update Graph' to see the visualization.")
 
 # Add refresh button for manual updates
-if st.button("Refresh Data", help="Refresh to get the latest JSON messages"):
-    st.rerun()
+col_refresh1, col_refresh2 = st.columns([1, 4])
+with col_refresh1:
+    if st.button("Refresh Data", help="Refresh to get the latest JSON messages"):
+        st.rerun()
+
+# --- Auto-refresh mechanism ---
+# This section implements automatic page refresh when auto-update is enabled
+if (hasattr(st.session_state, 'auto_update_graph') and 
+    st.session_state.auto_update_graph and 
+    hasattr(st.session_state, 'is_mqtt_connected') and 
+    st.session_state.is_mqtt_connected):
+    
+    # Add a placeholder for auto-refresh status
+    with col_refresh2:
+        st.info("🔄 Auto-refresh enabled - Page will update automatically every 2 seconds")
+    
+    # Use st.empty() to create a placeholder for the auto-refresh timer
+    auto_refresh_placeholder = st.empty()
+    
+    # Implement auto-refresh with a short delay
+    time.sleep(2)  # Wait 2 seconds before triggering refresh
+    st.rerun()  # Trigger page refresh to get latest data
+
+elif (hasattr(st.session_state, 'auto_update_graph') and 
+      st.session_state.auto_update_graph and 
+      (not hasattr(st.session_state, 'is_mqtt_connected') or 
+       not st.session_state.is_mqtt_connected)):
+    
+    with col_refresh2:
+        st.warning("⚠️ Auto-refresh is enabled but MQTT is not connected")
