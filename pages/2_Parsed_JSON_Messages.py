@@ -18,6 +18,8 @@ if 'selected_y_axes' not in st.session_state:
     st.session_state.selected_y_axes = []
 if 'last_json_message_count' not in st.session_state:
     st.session_state.last_json_message_count = 0
+if 'multi_graph_enabled' not in st.session_state:
+    st.session_state.multi_graph_enabled = False
 
 # --- Auto-refresh data from MQTT client ---
 # Check if MQTT client exists and is connected, then fetch latest JSON messages
@@ -152,6 +154,15 @@ else:
                 )
                 st.session_state.auto_update_graph = auto_update
                 
+                # Multi Graph Checkbox
+                multi_graph = st.checkbox(
+                    "Multi Graph Mode",
+                    value=st.session_state.multi_graph_enabled,
+                    help="Create separate graphs for each selected Y-axis variable",
+                    key="multi_graph_checkbox"
+                )
+                st.session_state.multi_graph_enabled = multi_graph
+                
                 # Generate Graph Button
                 generate_graph = st.button(
                     "Generate Graph",
@@ -189,32 +200,83 @@ else:
                         if plot_df.empty:
                             st.warning("No valid data points found for the selected columns after removing invalid values.")
                         else:
-                            # Create the plot
-                            fig = go.Figure()
-                            
-                            # Add a line for each selected Y-axis
-                            for y_col in selected_y_axes:
-                                fig.add_trace(go.Scatter(
-                                    x=plot_df[selected_x_axis],
-                                    y=plot_df[y_col],
-                                    mode='lines+markers',
-                                    name=y_col,
-                                    line=dict(width=2),
-                                    marker=dict(size=6)
-                                ))
-                            
-                            # Update layout
-                            fig.update_layout(
-                                title=f"JSON Data Visualization: {', '.join(selected_y_axes)} vs {selected_x_axis}",
-                                xaxis_title=selected_x_axis,
-                                yaxis_title="Values",
-                                hovermode='x unified',
-                                showlegend=True,
-                                height=500
-                            )
-                            
-                            # Display the plot
-                            st.plotly_chart(fig, use_container_width=True)
+                            # Check if multi-graph mode is enabled
+                            if st.session_state.multi_graph_enabled:
+                                # Create separate graphs for each Y-axis
+                                st.subheader("Multi-Graph Visualization")
+                                
+                                # Calculate number of columns for layout (max 2 columns)
+                                num_graphs = len(selected_y_axes)
+                                cols_per_row = min(2, num_graphs)
+                                
+                                # Create graphs in rows of up to 2 columns
+                                for i in range(0, num_graphs, cols_per_row):
+                                    # Create columns for this row
+                                    if i + 1 < num_graphs and cols_per_row == 2:
+                                        col_left, col_right = st.columns(2)
+                                        columns = [col_left, col_right]
+                                    else:
+                                        columns = [st.columns(1)[0]]
+                                    
+                                    # Create graphs for this row
+                                    for j, col in enumerate(columns):
+                                        graph_index = i + j
+                                        if graph_index < num_graphs:
+                                            y_col = selected_y_axes[graph_index]
+                                            
+                                            with col:
+                                                # Create individual graph
+                                                fig = go.Figure()
+                                                
+                                                fig.add_trace(go.Scatter(
+                                                    x=plot_df[selected_x_axis],
+                                                    y=plot_df[y_col],
+                                                    mode='lines+markers',
+                                                    name=y_col,
+                                                    line=dict(width=2),
+                                                    marker=dict(size=6)
+                                                ))
+                                                
+                                                # Update layout for individual graph
+                                                fig.update_layout(
+                                                    title=f"{y_col} vs {selected_x_axis}",
+                                                    xaxis_title=selected_x_axis,
+                                                    yaxis_title=y_col,
+                                                    hovermode='x unified',
+                                                    showlegend=False,  # Hide legend for individual graphs
+                                                    height=400,
+                                                    margin=dict(l=50, r=50, t=50, b=50)
+                                                )
+                                                
+                                                # Display the individual plot
+                                                st.plotly_chart(fig, use_container_width=True)
+                            else:
+                                # Create single combined plot (original behavior)
+                                fig = go.Figure()
+                                
+                                # Add a line for each selected Y-axis
+                                for y_col in selected_y_axes:
+                                    fig.add_trace(go.Scatter(
+                                        x=plot_df[selected_x_axis],
+                                        y=plot_df[y_col],
+                                        mode='lines+markers',
+                                        name=y_col,
+                                        line=dict(width=2),
+                                        marker=dict(size=6)
+                                    ))
+                                
+                                # Update layout
+                                fig.update_layout(
+                                    title=f"JSON Data Visualization: {', '.join(selected_y_axes)} vs {selected_x_axis}",
+                                    xaxis_title=selected_x_axis,
+                                    yaxis_title="Values",
+                                    hovermode='x unified',
+                                    showlegend=True,
+                                    height=500
+                                )
+                                
+                                # Display the plot
+                                st.plotly_chart(fig, use_container_width=True)
                             
                             # Show data summary
                             st.subheader("Data Summary")
