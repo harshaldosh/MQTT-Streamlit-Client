@@ -158,7 +158,7 @@ class MqttClient:
         return self.json_messages
 
 # --- Streamlit Page Configuration ---
-st.set_page_config(layout="wide", page_title="Streamlit MQTT Client")
+st.set_page_config(layout="wide", page_title="MQTT Client")
 
 # --- Session State Initialization ---
 # This ensures that variables persist across reruns of the Streamlit app
@@ -348,6 +348,8 @@ def load_periodic_messages_from_csv(uploaded_file):
 
 # --- UI Layout ---
 
+st.title("MQTT Client")
+
 st.sidebar.header("MQTT Connection")
 with st.sidebar.form("mqtt_config_form"):
     st.session_state.broker_address = st.text_input("Broker Address", value=st.session_state.broker_address, key="broker_input")
@@ -496,10 +498,6 @@ with col2:
     st.subheader("Received Messages")
     # Placeholder for messages, will be updated periodically
     message_placeholder = st.empty()
-    
-    st.subheader("Parsed JSON Messages")
-    # Placeholder for JSON messages
-    json_message_placeholder = st.empty()
 
     # --- Message Update Logic (Rely on Streamlit's natural reruns) ---
     # This section gets executed on every Streamlit rerun (e.g., user interaction, button click).
@@ -536,37 +534,9 @@ with col2:
                 )
             else:
                 st.info("Waiting for messages...")
-                
-        with json_message_placeholder.container():
-            if not st.session_state.json_messages_df.empty:
-                # Create a display DataFrame without the raw JSON Data column for cleaner view
-                display_df = st.session_state.json_messages_df.drop(columns=['JSON Data'], errors='ignore')
-                st.dataframe(display_df, height=300, use_container_width=True)
-                
-                # Show expandable raw JSON data
-                with st.expander("View Raw JSON Data"):
-                    for idx, row in st.session_state.json_messages_df.iterrows():
-                        st.write(f"**Message {row['Serial No.']} ({row['Timestamp']}) - Topic: {row['Topic']}**")
-                        st.json(row['JSON Data'])
-                        st.write("---")
-                
-                # --- Export JSON Messages to CSV ---
-                json_csv_data = display_df.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="Export JSON Messages to CSV",
-                    data=json_csv_data,
-                    file_name=f"mqtt_json_messages_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                    mime="text/csv",
-                    disabled=st.session_state.json_messages_df.empty,
-                    key="download_json_csv"
-                )
-            else:
-                st.info("No JSON messages received yet. JSON messages will appear here when valid JSON payloads are received.")
     else:
         with message_placeholder.container():
             st.info("Connect to the MQTT broker to start receiving messages.")
-        with json_message_placeholder.container():
-            st.info("Connect to the MQTT broker to start receiving JSON messages.")
 
 if st.button("Refresh to process MQTT events"):
         st.rerun()
