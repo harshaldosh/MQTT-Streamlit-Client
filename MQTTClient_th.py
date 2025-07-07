@@ -6,6 +6,7 @@ import threading
 import uuid
 from datetime import datetime
 import io # For CSV export/import operations
+import json # For JSON parsing
 
 # --- MQTT Client Class (Encapsulated) ---
 class MqttClient:
@@ -26,6 +27,7 @@ class MqttClient:
         self.client.on_publish = self._on_publish
         self.is_connected = False
         self.messages_received = [] # To store received messages
+        self.json_messages = [] # To store parsed JSON messages
 
         if self.username and self.password:
             self.client.username_pw_set(self.username, self.password)
@@ -55,6 +57,23 @@ class MqttClient:
             "Topic": msg.topic,
             "Payload": payload
         })
+        
+        # Try to parse JSON payload
+        try:
+            json_data = json.loads(payload)
+            # Flatten JSON for table display
+            flattened_json = self._flatten_json(json_data)
+            self.json_messages.append({
+                "Serial No.": len(self.json_messages) + 1,
+                "Timestamp": timestamp,
+                "Topic": msg.topic,
+                "JSON Data": json_data,
+                **flattened_json  # Add flattened key-value pairs
+            })
+        except (json.JSONDecodeError, TypeError):
+            # Not a valid JSON, skip JSON parsing
+            pass
+            
         # Note: Avoid printing to console here in Streamlit as it can be overwhelming
         # st.rerun() # DO NOT call rerun directly from callback. It causes issues.
                      # Updates are handled by Streamlit's natural reruns or a loop.
@@ -63,6 +82,26 @@ class MqttClient:
         """Callback for when a message is published."""
         # This callback is optional; can be used for debugging published messages
         pass
+
+    def _flatten_json(self, json_obj, parent_key='', sep='_'):
+        """
+        Flatten a nested JSON object for table display.
+        """
+        items = []
+        if isinstance(json_obj, dict):
+            for k, v in json_obj.items():
+                new_key = f"{parent_key}{sep}{k}" if parent_key else k
+                if isinstance(v, dict):
+                    items.extend(self._flatten_json(v, new_key, sep=sep).items())
+                elif isinstance(v, list):
+                    for i, item in enumerate(v):
+                        if isinstance(item, dict):
+                            items.extend(self._flatten_json(item, f"{new_key}{sep}{i}", sep=sep).items())
+                        else:
+                            items.append((f"{new_key}{sep}{i}", item))
+                else:
+                    items.append((new_key, v))
+        return dict(items)
 
     def connect(self):
         """Connects the MQTT client to the broker."""
@@ -114,6 +153,10 @@ class MqttClient:
         """Returns the list of messages received so far."""
         return self.messages_received
 
+    def get_json_messages(self):
+        """Returns the list of parsed JSON messages received so far."""
+        return self.json_messages
+
 # --- Streamlit Page Configuration ---
 st.set_page_config(layout="wide", page_title="Streamlit MQTT Client")
 
@@ -131,6 +174,8 @@ if 'stop_publish_event' not in st.session_state:
     st.session_state.stop_publish_event = threading.Event()
 if 'messages_df' not in st.session_state:
     st.session_state.messages_df = pd.DataFrame(columns=["Serial No.", "Timestamp", "Topic", "Payload"])
+if 'json_messages_df' not in st.session_state:
+    st.session_state.json_messages_df = pd.DataFrame()
 if 'auto_publish_messages' not in st.session_state:
     st.session_state.auto_publish_messages = [
         {"Topic": "test/message", "Payload": "Message 1", "QoS": 0, "Retain": False},
@@ -150,6 +195,8 @@ if 'show_password' not in st.session_state:
     st.session_state.show_password = False
 if 'last_message_count' not in st.session_state: # Added for more robust message display update
     st.session_state.last_message_count = 0
+if 'last_json_message_count' not in st.session_state:
+    st.session_state.last_json_message_count = 0
 
 
 # --- Helper Functions for UI Interactions ---
@@ -184,6 +231,8 @@ def disconnect_mqtt_ui():
         st.session_state.stop_publish_event.clear() # Reset for next run
         st.session_state.messages_df = pd.DataFrame(columns=["Serial No.", "Timestamp", "Topic", "Payload"]) # Clear messages
         st.session_state.last_message_count = 0 # Reset message count
+        st.session_state.json_messages_df = pd.DataFrame() # Clear JSON messages
+        st.session_state.last_json_message_count = 0 # Reset JSON message count
         st.success("Disconnected from MQTT Broker.")
     st.rerun() # Rerun to update UI state
 
@@ -447,12 +496,17 @@ with col2:
     st.subheader("Received Messages")
     # Placeholder for messages, will be updated periodically
     message_placeholder = st.empty()
+    
+    st.subheader("Parsed JSON Messages")
+    # Placeholder for JSON messages
+    json_message_placeholder = st.empty()
 
     # --- Message Update Logic (Rely on Streamlit's natural reruns) ---
     # This section gets executed on every Streamlit rerun (e.g., user interaction, button click).
     # New messages received by the MQTT client's background thread will be collected here.
     if st.session_state.mqtt_client and st.session_state.is_mqtt_connected:
         new_messages = st.session_state.mqtt_client.get_received_messages()
+        new_json_messages = st.session_state.mqtt_client.get_json_messages()
         
         # Only update DataFrame and re-render if there are new messages, or if it was empty
         # and now has messages. This helps prevent unnecessary dataframe re-creations.
@@ -460,11 +514,10 @@ with col2:
             st.session_state.messages_df = pd.DataFrame(new_messages)
             st.session_state.messages_df["Serial No."] = range(1, len(st.session_state.messages_df) + 1)
             st.session_state.messages_df = st.session_state.messages_df[["Serial No.", "Timestamp", "Topic", "Payload"]]
-            # No st.rerun() here, rely on the main Streamlit loop.
-            # You could add a small time.sleep() and st.rerun() here if you want
-            # a "pseudo-live" update, but it causes the whole app to refresh.
-            # time.sleep(0.1) # short sleep
-            # st.rerun() # Force a refresh
+            
+        # Update JSON messages DataFrame
+        if new_json_messages and (len(new_json_messages) != len(st.session_state.json_messages_df) or st.session_state.json_messages_df.empty):
+            st.session_state.json_messages_df = pd.DataFrame(new_json_messages)
             
         with message_placeholder.container():
             if not st.session_state.messages_df.empty:
@@ -483,9 +536,37 @@ with col2:
                 )
             else:
                 st.info("Waiting for messages...")
+                
+        with json_message_placeholder.container():
+            if not st.session_state.json_messages_df.empty:
+                # Create a display DataFrame without the raw JSON Data column for cleaner view
+                display_df = st.session_state.json_messages_df.drop(columns=['JSON Data'], errors='ignore')
+                st.dataframe(display_df, height=300, use_container_width=True)
+                
+                # Show expandable raw JSON data
+                with st.expander("View Raw JSON Data"):
+                    for idx, row in st.session_state.json_messages_df.iterrows():
+                        st.write(f"**Message {row['Serial No.']} ({row['Timestamp']}) - Topic: {row['Topic']}**")
+                        st.json(row['JSON Data'])
+                        st.write("---")
+                
+                # --- Export JSON Messages to CSV ---
+                json_csv_data = display_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="Export JSON Messages to CSV",
+                    data=json_csv_data,
+                    file_name=f"mqtt_json_messages_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv",
+                    disabled=st.session_state.json_messages_df.empty,
+                    key="download_json_csv"
+                )
+            else:
+                st.info("No JSON messages received yet. JSON messages will appear here when valid JSON payloads are received.")
     else:
         with message_placeholder.container():
             st.info("Connect to the MQTT broker to start receiving messages.")
+        with json_message_placeholder.container():
+            st.info("Connect to the MQTT broker to start receiving JSON messages.")
 
 if st.button("Refresh to process MQTT events"):
         st.rerun()
