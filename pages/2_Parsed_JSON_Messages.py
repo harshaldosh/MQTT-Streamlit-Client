@@ -93,12 +93,12 @@ with col_config2:
 
 with col_config3:
     # Database statistics
-    if use_db:
-        try:
+    #if use_db:
+        #try:
             #db_count = st.session_state.json_db.get_message_count()
             #st.metric("Messages in DB", db_count)
-        except Exception as e:
-            st.error(f"Database error: {e}")
+        #except Exception as e:
+         #   st.error(f"Database error: {e}")
 
 
 
