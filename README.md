@@ -52,3 +52,8 @@ streamlit run MQTTClient_th.py
 MQTT broker working on your machine. if not use any other MQTT broker.
 Python
 PIP
+
+**Creating Database**
+```shell
+python -c "from database import JSONMessageDB; db = JSONMessageDB(); print('Database created successfully')"
+```  
