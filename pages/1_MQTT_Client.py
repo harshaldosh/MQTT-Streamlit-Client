@@ -238,7 +238,7 @@ def disconnect_mqtt_ui():
         st.success("Disconnected from MQTT Broker.")
     st.rerun() # Rerun to update UI state
 
-def subscribe_topic_ui(topic, qos=0):
+def subscribe_topic_ui():
     """Handles subscribing to a topic from UI."""
     # Get current values from session state instead of using parameters
     topic = st.session_state.get('subscribe_topic_input', '')
