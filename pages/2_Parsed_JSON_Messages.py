@@ -70,7 +70,7 @@ st.title("Parsed JSON Messages")
 st.header("Database Controls")
 
 # Database configuration row
-col_config1, col_config2, col_config3 = st.columns([1, 1, 1])
+col_config1, col_config2 = st.columns([1, 1])
 
 with col_config1:
     # Database usage toggle
@@ -95,8 +95,8 @@ with col_config3:
     # Database statistics
     if use_db:
         try:
-            db_count = st.session_state.json_db.get_message_count()
-            st.metric("Messages in DB", db_count)
+            #db_count = st.session_state.json_db.get_message_count()
+            #st.metric("Messages in DB", db_count)
         except Exception as e:
             st.error(f"Database error: {e}")
 
