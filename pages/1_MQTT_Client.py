@@ -240,6 +240,10 @@ def disconnect_mqtt_ui():
 
 def subscribe_topic_ui(topic, qos=0):
     """Handles subscribing to a topic from UI."""
+    # Get current values from session state instead of using parameters
+    topic = st.session_state.get('subscribe_topic_input', '')
+    qos = st.session_state.get('subscribe_qos_input', 0)
+    
     if st.session_state.mqtt_client and st.session_state.is_mqtt_connected:
         st.session_state.mqtt_client.subscribe(topic, qos)
         st.session_state.subscribed_topics.add(topic)
@@ -492,7 +496,6 @@ with col2:
         st.form_submit_button(
             "Subscribe",
             on_click=subscribe_topic_ui,
-            args=(new_topic_to_subscribe, subscribe_qos),
             disabled=not st.session_state.is_mqtt_connected or new_topic_to_subscribe in st.session_state.subscribed_topics
         )
 
