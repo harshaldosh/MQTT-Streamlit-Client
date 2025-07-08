@@ -496,7 +496,7 @@ with col2:
         st.form_submit_button(
             "Subscribe",
             on_click=subscribe_topic_ui,
-            disabled=not st.session_state.is_mqtt_connected or new_topic_to_subscribe in st.session_state.subscribed_topics
+            disabled=not st.session_state.is_mqtt_connected or not new_topic_to_subscribe.strip()
         )
 
     st.subheader("Active Subscriptions")
