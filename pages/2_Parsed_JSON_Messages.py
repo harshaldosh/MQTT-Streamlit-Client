@@ -141,8 +141,14 @@ with st.sidebar:
     
     with col1:
         if st.button("Clear Table", type="secondary", help="Clear messages from current session"):
+            # Clear the JSON messages DataFrame
             st.session_state.json_messages_df = pd.DataFrame()
             st.session_state.last_json_message_count = 0
+            # Also clear the MQTT client's JSON messages if it exists
+            if ('mqtt_client' in st.session_state and 
+                st.session_state.mqtt_client and 
+                hasattr(st.session_state.mqtt_client, 'json_messages')):
+                st.session_state.mqtt_client.json_messages = []
             st.success("Table cleared")
             st.rerun()
     
@@ -152,20 +158,23 @@ with st.sidebar:
                 try:
                     st.session_state.json_db.clear_all_messages()
                     st.success("Database cleared")
-                    st.rerun()
                 except Exception as e:
                     st.error(f"Error clearing database: {e}")
+                st.rerun()
     
     # Danger zone
     with st.expander("⚠️ Danger Zone"):
         if st.button("Delete Database File", type="secondary", help="Permanently delete the database file"):
-            if st.session_state.json_db.delete_database():
-                st.success("Database file deleted")
-                # Reinitialize database
-                st.session_state.json_db = JSONMessageDB()
-                st.rerun()
-            else:
-                st.error("Failed to delete database file")
+            try:
+                if st.session_state.json_db.delete_database():
+                    st.success("Database file deleted")
+                    # Reinitialize database
+                    st.session_state.json_db = JSONMessageDB()
+                else:
+                    st.error("Failed to delete database file")
+            except Exception as e:
+                st.error(f"Error deleting database: {e}")
+            st.rerun()
 # Check if we have JSON messages data
 current_has_data = ('json_messages_df' in st.session_state and 
                    not st.session_state.json_messages_df.empty)
