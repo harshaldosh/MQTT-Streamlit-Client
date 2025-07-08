@@ -5,9 +5,14 @@ import time
 from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
+from database import JSONMessageDB
 
 # --- Streamlit Page Configuration ---
 st.set_page_config(layout="wide", page_title="Parsed JSON Messages")
+
+# Initialize database
+if 'json_db' not in st.session_state:
+    st.session_state.json_db = JSONMessageDB()
 
 # Initialize session state for graph settings
 if 'auto_update_graph' not in st.session_state:
@@ -20,6 +25,10 @@ if 'last_json_message_count' not in st.session_state:
     st.session_state.last_json_message_count = 0
 if 'multi_graph_enabled' not in st.session_state:
     st.session_state.multi_graph_enabled = False
+if 'use_database' not in st.session_state:
+    st.session_state.use_database = True
+if 'auto_save_to_db' not in st.session_state:
+    st.session_state.auto_save_to_db = True
 
 # --- Auto-refresh data from MQTT client ---
 # Check if MQTT client exists and is connected, then fetch latest JSON messages
@@ -42,11 +51,137 @@ if ('mqtt_client' in st.session_state and
             
             st.session_state.json_messages_df = pd.DataFrame(latest_json_messages)
             st.session_state.last_json_message_count = current_message_count
+            
+            # Auto-save new messages to database if enabled
+            if (st.session_state.auto_save_to_db and 
+                latest_json_messages and 
+                current_message_count > st.session_state.last_json_message_count):
+                
+                # Save only new messages to database
+                new_messages = latest_json_messages[st.session_state.last_json_message_count:]
+                try:
+                    st.session_state.json_db.insert_messages_batch(new_messages)
+                except Exception as e:
+                    st.error(f"Error saving to database: {e}")
 
 st.title("Parsed JSON Messages")
 
+# Database controls in sidebar
+with st.sidebar:
+    st.header("Database Controls")
+    
+    # Database usage toggle
+    use_db = st.checkbox(
+        "Use SQLite Database",
+        value=st.session_state.use_database,
+        help="Store JSON messages in SQLite database for persistence"
+    )
+    st.session_state.use_database = use_db
+    
+    # Auto-save toggle
+    auto_save = st.checkbox(
+        "Auto-save to Database",
+        value=st.session_state.auto_save_to_db,
+        disabled=not use_db,
+        help="Automatically save new JSON messages to database"
+    )
+    st.session_state.auto_save_to_db = auto_save
+    
+    # Database statistics
+    if use_db:
+        try:
+            db_count = st.session_state.json_db.get_message_count()
+            st.metric("Messages in DB", db_count)
+            
+            topics_in_db = st.session_state.json_db.get_topics()
+            if topics_in_db:
+                st.write("**Topics in DB:**")
+                for topic in topics_in_db[:5]:  # Show first 5 topics
+                    st.write(f"• {topic}")
+                if len(topics_in_db) > 5:
+                    st.write(f"... and {len(topics_in_db) - 5} more")
+        except Exception as e:
+            st.error(f"Database error: {e}")
+    
+    st.write("---")
+    
+    # Database actions
+    if use_db:
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("Load from DB", help="Load all messages from database"):
+                try:
+                    db_messages = st.session_state.json_db.get_all_messages()
+                    if db_messages:
+                        st.session_state.json_messages_df = pd.DataFrame(db_messages)
+                        st.success(f"Loaded {len(db_messages)} messages from database")
+                        st.rerun()
+                    else:
+                        st.info("No messages found in database")
+                except Exception as e:
+                    st.error(f"Error loading from database: {e}")
+        
+        with col2:
+            if st.button("Save to DB", help="Save current messages to database"):
+                if 'json_messages_df' in st.session_state and not st.session_state.json_messages_df.empty:
+                    try:
+                        messages_to_save = st.session_state.json_messages_df.to_dict('records')
+                        st.session_state.json_db.insert_messages_batch(messages_to_save)
+                        st.success("Messages saved to database")
+                    except Exception as e:
+                        st.error(f"Error saving to database: {e}")
+                else:
+                    st.warning("No messages to save")
+    
+    # Clear options
+    st.subheader("Clear Data")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("Clear Table", type="secondary", help="Clear messages from current session"):
+            st.session_state.json_messages_df = pd.DataFrame()
+            st.session_state.last_json_message_count = 0
+            st.success("Table cleared")
+            st.rerun()
+    
+    with col2:
+        if use_db:
+            if st.button("Clear DB", type="secondary", help="Clear all messages from database"):
+                try:
+                    st.session_state.json_db.clear_all_messages()
+                    st.success("Database cleared")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error clearing database: {e}")
+    
+    # Danger zone
+    with st.expander("⚠️ Danger Zone"):
+        if st.button("Delete Database File", type="secondary", help="Permanently delete the database file"):
+            if st.session_state.json_db.delete_database():
+                st.success("Database file deleted")
+                # Reinitialize database
+                st.session_state.json_db = JSONMessageDB()
+                st.rerun()
+            else:
+                st.error("Failed to delete database file")
 # Check if we have JSON messages data
-if 'json_messages_df' not in st.session_state or st.session_state.json_messages_df.empty:
+current_has_data = ('json_messages_df' in st.session_state and 
+                   not st.session_state.json_messages_df.empty)
+
+# If using database and no current data, try to load from database
+if (st.session_state.use_database and 
+    not current_has_data):
+    try:
+        db_messages = st.session_state.json_db.get_all_messages()
+        if db_messages:
+            st.session_state.json_messages_df = pd.DataFrame(db_messages)
+            current_has_data = True
+    except Exception as e:
+        st.error(f"Error loading from database: {e}")
+
+if not current_has_data:
     st.info("No JSON messages available. Please connect to the MQTT broker and receive some JSON messages first.")
     st.markdown("**Note:** JSON messages will appear here when valid JSON payloads are received on the MQTT Client page.")
     
@@ -68,7 +203,8 @@ else:
     # Show message count and last update info
     col_info1, col_info2, col_info3 = st.columns(3)
     with col_info1:
-        st.metric("Total JSON Messages", len(st.session_state.json_messages_df))
+        current_count = len(st.session_state.json_messages_df)
+        st.metric("Current Messages", current_count)
     with col_info2:
         if not st.session_state.json_messages_df.empty:
             last_message_time = st.session_state.json_messages_df.iloc[-1]['Timestamp']
@@ -77,8 +213,18 @@ else:
         connection_status = "Connected" if (hasattr(st.session_state, 'is_mqtt_connected') and st.session_state.is_mqtt_connected) else "Disconnected"
         st.metric("MQTT Status", connection_status)
     
+    # Data source indicator
+    if st.session_state.use_database:
+        try:
+            db_count = st.session_state.json_db.get_message_count()
+            st.info(f"📊 Database contains {db_count} total messages | Showing {len(st.session_state.json_messages_df)} messages")
+        except:
+            st.info("📊 Using database storage")
+    else:
+        st.info("📊 Using session storage only (data will be lost on page refresh)")
+    
     # Create a display DataFrame without the raw JSON Data column for cleaner view
-    display_df = st.session_state.json_messages_df.drop(columns=['JSON Data'], errors='ignore')
+    display_df = st.session_state.json_messages_df.drop(columns=['JSON Data', 'Created At'], errors='ignore')
     st.dataframe(display_df, height=300, use_container_width=True)
     
     # Show expandable raw JSON data
@@ -98,6 +244,23 @@ else:
         disabled=st.session_state.json_messages_df.empty,
         key="download_json_csv"
     )
+    
+    # Export from database option
+    if st.session_state.use_database:
+        try:
+            db_messages = st.session_state.json_db.get_all_messages()
+            if db_messages:
+                db_df = pd.DataFrame(db_messages).drop(columns=['JSON Data', 'Created At'], errors='ignore')
+                db_csv_data = db_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="Export All DB Messages to CSV",
+                    data=db_csv_data,
+                    file_name=f"mqtt_all_db_messages_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv",
+                    key="download_db_csv"
+                )
+        except Exception as e:
+            st.error(f"Error preparing database export: {e}")
     
     # --- JSON Data Visualization ---
     st.subheader("JSON Data Visualization")
