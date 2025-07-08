@@ -500,3 +500,54 @@ elif (hasattr(st.session_state, 'auto_update_graph') and
     
     with col_refresh2:
         st.warning("⚠️ Auto-refresh is enabled but MQTT is not connected")
+
+# Database action buttons
+st.subheader("Database Actions")
+col_btn1, col_btn2, col_btn3, col_btn4 = st.columns(4)
+
+with col_btn1:
+    if st.button("Load from DB", type="primary", disabled=not use_db, help="Load all messages from database"):
+        try:
+            db_messages = st.session_state.json_db.get_all_messages()
+            if db_messages:
+                st.session_state.json_messages_df = pd.DataFrame(db_messages)
+                st.success(f"Loaded {len(db_messages)} messages from database")
+                st.rerun()
+            else:
+                st.info("No messages found in database")
+        except Exception as e:
+            st.error(f"Error loading from database: {e}")
+
+with col_btn2:
+    if st.button("Save to DB", type="primary", disabled=not use_db, help="Save current messages to database"):
+        if 'json_messages_df' in st.session_state and not st.session_state.json_messages_df.empty:
+            try:
+                messages_to_save = st.session_state.json_messages_df.to_dict('records')
+                st.session_state.json_db.insert_messages_batch(messages_to_save)
+                st.success("Messages saved to database")
+            except Exception as e:
+                st.error(f"Error saving to database: {e}")
+        else:
+            st.warning("No messages to save")
+
+with col_btn3:
+    if st.button("Clear Table", type="secondary", help="Clear messages from current session"):
+        # Clear the JSON messages DataFrame
+        st.session_state.json_messages_df = pd.DataFrame()
+        st.session_state.last_json_message_count = 0
+        # Also clear the MQTT client's JSON messages if it exists
+        if ('mqtt_client' in st.session_state and 
+            st.session_state.mqtt_client and 
+            hasattr(st.session_state.mqtt_client, 'json_messages')):
+            st.session_state.mqtt_client.json_messages = []
+        st.success("Table cleared")
+        st.rerun()
+
+with col_btn4:
+    if st.button("Clear DB", type="secondary", disabled=not use_db, help="Clear all messages from database"):
+        try:
+            st.session_state.json_db.clear_all_messages()
+            st.success("Database cleared")
+        except Exception as e:
+            st.error(f"Error clearing database: {e}")
+        st.rerun()
