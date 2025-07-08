@@ -50,11 +50,11 @@ if ('mqtt_client' in st.session_state and
             st.session_state.json_messages_df.empty):
             
             st.session_state.json_messages_df = pd.DataFrame(latest_json_messages)
-            st.session_state.last_json_message_count = current_message_count
             
             # Auto-save new messages to database if enabled
             if (st.session_state.auto_save_to_db and 
-                latest_json_messages and 
+                latest_json_messages and
+                st.session_state.use_database and
                 current_message_count > st.session_state.last_json_message_count):
                 
                 # Save only new messages to database
@@ -63,6 +63,8 @@ if ('mqtt_client' in st.session_state and
                     st.session_state.json_db.insert_messages_batch(new_messages)
                 except Exception as e:
                     st.error(f"Error saving to database: {e}")
+            
+            st.session_state.last_json_message_count = current_message_count
 
 st.title("Parsed JSON Messages")
 
@@ -376,11 +378,17 @@ else:
                             summary_df = plot_df[plot_columns].describe()
                             st.dataframe(summary_df, use_container_width=True)
                             
+                            # Add some spacing before the next section
+                            st.write("---")
+                            
                     except Exception as e:
                         st.error(f"Error generating graph: {str(e)}")
             
             elif not selected_y_axes:
                 st.info("Select Y-axis columns and click 'Generate Graph' or enable 'Auto Update Graph' to see the visualization.")
+
+# Add spacing before refresh controls
+st.write("---")
 
 # Add refresh button for manual updates
 col_refresh1, col_refresh2 = st.columns([1, 4])
@@ -413,6 +421,9 @@ elif (hasattr(st.session_state, 'auto_update_graph') and
     
     with col_refresh2:
         st.warning("⚠️ Auto-refresh is enabled but MQTT is not connected")
+
+# Add spacing before database actions
+st.write("---")
 
 # Database action buttons
 st.subheader("Database Actions")
