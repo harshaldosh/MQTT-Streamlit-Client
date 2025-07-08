@@ -101,35 +101,6 @@ with col_config3:
             st.error(f"Database error: {e}")
 
 
-# Additional database info and danger zone
-if use_db:
-    with st.expander("📊 Database Information"):
-        try:
-            topics_in_db = st.session_state.json_db.get_topics()
-            if topics_in_db:
-                st.write("**Topics in Database:**")
-                for topic in topics_in_db[:10]:  # Show first 10 topics
-                    st.write(f"• {topic}")
-                if len(topics_in_db) > 10:
-                    st.write(f"... and {len(topics_in_db) - 10} more")
-            else:
-                st.info("No topics found in database")
-        except Exception as e:
-            st.error(f"Database error: {e}")
-    
-    with st.expander("⚠️ Danger Zone"):
-        st.warning("This action will permanently delete the database file!")
-        if st.button("Delete Database File", type="secondary", help="Permanently delete the database file"):
-            try:
-                if st.session_state.json_db.delete_database():
-                    st.success("Database file deleted")
-                    # Reinitialize database
-                    st.session_state.json_db = JSONMessageDB()
-                else:
-                    st.error("Failed to delete database file")
-            except Exception as e:
-                st.error(f"Error deleting database: {e}")
-            st.rerun()
 
 st.write("---")  # Separator
 
@@ -501,3 +472,35 @@ with col_btn4:
         except Exception as e:
             st.error(f"Error clearing database: {e}")
         st.rerun()
+
+
+
+# Additional database info and danger zone
+if use_db:
+    with st.expander("📊 Database Information"):
+        try:
+            topics_in_db = st.session_state.json_db.get_topics()
+            if topics_in_db:
+                st.write("**Topics in Database:**")
+                for topic in topics_in_db[:10]:  # Show first 10 topics
+                    st.write(f"• {topic}")
+                if len(topics_in_db) > 10:
+                    st.write(f"... and {len(topics_in_db) - 10} more")
+            else:
+                st.info("No topics found in database")
+        except Exception as e:
+            st.error(f"Database error: {e}")
+    
+    with st.expander("⚠️ Danger Zone"):
+        st.warning("This action will permanently delete the database file!")
+        if st.button("Delete Database File", type="secondary", help="Permanently delete the database file"):
+            try:
+                if st.session_state.json_db.delete_database():
+                    st.success("Database file deleted")
+                    # Reinitialize database
+                    st.session_state.json_db = JSONMessageDB()
+                else:
+                    st.error("Failed to delete database file")
+            except Exception as e:
+                st.error(f"Error deleting database: {e}")
+            st.rerun()
